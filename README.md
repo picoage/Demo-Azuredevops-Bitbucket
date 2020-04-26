@@ -1,7 +1,7 @@
 # Demo-Azuredevops-Bitbucket
 Presentation and links to the demo
 
-# Git Commad to push initial code 
+# Git commad to push initial code 
 
 git init
 
