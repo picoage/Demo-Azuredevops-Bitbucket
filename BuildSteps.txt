@@ -10,7 +10,7 @@ trigger:
 #pool:
 # name: Self-host
  
- pool:
+pool:
    vmImage: 'windows-latest'
 
 variables:
@@ -43,5 +43,3 @@ steps:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)'
               ArtifactName: 'drop'
               publishLocation: 'Container'
-
-          
