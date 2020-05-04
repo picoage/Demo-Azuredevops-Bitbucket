@@ -19,6 +19,15 @@ variables:
   buildConfiguration: 'Release'
 
 steps:
+
+- task: SonarQubePrepare@4
+  displayName: sonarqubePrepare
+  inputs:
+    SonarQube: 'SonarQubeEnpoint'
+    scannerMode: 'MSBuild'
+    projectKey: [projectGuid]
+    projectName: [ProjectName]
+
 - task: DotNetCoreCLI@2
   displayName: restore
   inputs:
@@ -29,6 +38,23 @@ steps:
   displayName: build
   inputs:
       command: 'build'
+
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: test
+    projects: '**/*Tests/*.csproj'
+    arguments: '--configuration $(buildConfiguration)'
+
+# Publish the code coverage result (summary and web site)
+# The summary allows to view the coverage percentage in the summary tab
+# The web site allows to view which lines are covered directly in Azure Pipeline
+- task: PublishCodeCoverageResults@1
+  displayName: 'Publish code coverage'
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(Build.SourcesDirectory)/CodeCoverage/Cobertura.xml'
+    reportDirectory: '$(Build.SourcesDirectory)/CodeCoverage'
 
 - task: DotNetCoreCLI@2
   displayName: package
@@ -43,3 +69,12 @@ steps:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)'
               ArtifactName: 'drop'
               publishLocation: 'Container'
+
+
+- task: SonarQubeAnalyze@4
+  displayName: sonarqubeAnalyze
+
+- task: SonarQubePublish@4
+  displayName: sonarqubeResults
+  inputs:
+    pollingTimeoutSec: '300'
