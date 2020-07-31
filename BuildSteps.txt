@@ -3,15 +3,12 @@
 # Add steps that publish symbols, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
 
-name: -[ProjectName]
 trigger:
-- master
+ - master
+ - feature/*
 
-#pool:
-# name: Self-host
- 
 pool:
-   vmImage: 'windows-latest'
+  vmImage: 'windows-latest'
 
 variables:
   solution: '**/*.sln'
@@ -19,45 +16,42 @@ variables:
   buildConfiguration: 'Release'
 
 steps:
-
 - task: SonarQubePrepare@4
   displayName: sonarqubePrepare
   inputs:
     SonarQube: 'SonarQubeEnpoint'
     scannerMode: 'MSBuild'
-    projectKey: [projectGuid]
-    projectName: [ProjectName]
+    projectKey: [projectkey]
+    projectName: [projectname]
 
 - task: DotNetCoreCLI@2
-  displayName: restore
+  displayName: 'vstsRestore'
   inputs:
     command: 'restore'
     feedsToUse: 'select'
+    vstsFeed: [feedkey]
+
+- task: NuGetCommand@2
+  displayName: 'nugetRestore' 
+  inputs:
+    restoreSolution: '$(solution)'
+
+- task: VSBuild@1
+  displayName: 'build' 
+  inputs:
+    solution: '$(solution)'
+    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
+
+- task: VSTest@2
+  displayName: 'test'
+  inputs:
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
 
 - task: DotNetCoreCLI@2
-  displayName: build
-  inputs:
-      command: 'build'
-
-
-- task: DotNetCoreCLI@2
-  displayName: 'Tests'
-  inputs:
-    command: test
-    projects: '**/*Tests/*.csproj'
-    arguments: '--configuration $(buildConfiguration)'
-
-# Publish the code coverage result (summary and web site)
-# The summary allows to view the coverage percentage in the summary tab
-# The web site allows to view which lines are covered directly in Azure Pipeline
-- task: PublishCodeCoverageResults@1
-  displayName: 'Publish code coverage'
-  inputs:
-    codeCoverageTool: Cobertura
-    summaryFileLocation: '$(Build.SourcesDirectory)/CodeCoverage/Cobertura.xml'
-    reportDirectory: '$(Build.SourcesDirectory)/CodeCoverage'
-
-- task: DotNetCoreCLI@2
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master')) 
   displayName: package
   inputs:
           command: 'publish'
@@ -65,12 +59,13 @@ steps:
           arguments: '--configuration $(BuildConfiguration) --output $(build.artifactstagingdirectory)'
 
 - task: PublishBuildArtifacts@1
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master')) 
   displayName: publish
   inputs:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)'
               ArtifactName: 'drop'
               publishLocation: 'Container'
-
+    
 
 - task: SonarQubeAnalyze@4
   displayName: sonarqubeAnalyze
@@ -79,3 +74,33 @@ steps:
   displayName: sonarqubeResults
   inputs:
     pollingTimeoutSec: '300'
+    
+- task: Veracode@3
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+  displayName: 'Veracode Scan'
+  inputs:
+    ConnectionDetailsSelection: 'Endpoint'
+    AnalysisService: 'Veracode'
+    veracodeAppProfile: 'Monte Carlo - QA Checklist'
+    version: '$(build.buildNumber)'
+    filepath: '$(build.artifactStagingDirectory)'
+    sandboxName: 'DailyBuild'
+    createSandBox: false
+    createProfile: false
+    failTheBuildIfVeracodeScanDidNotInitiate: false
+    scanStatusCheckInterval: '60'
+    importResults: false
+    failBuildOnPolicyFail: false
+
+- task: Veracode Flaw Importer@3
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+  displayName: 'Import scan results'   
+  inputs:
+    ConnectionDetailsSelection: 'Endpoint'
+    AnalysisService: 'Veracode'
+    veracodeAppProfile: 'Monte Carlo - QA Checklist'
+    sandboxName: 'DailyBuild'
+    importType: 'All Unmitigated Flaws Violating Policy'
+    workItemType: 'Bug'
+    area: '$(system.teamProject)'
+    flawImportLimit: '1000'    
